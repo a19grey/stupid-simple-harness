@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Stupid Simple Harness (SSH) - keep Claude Code working while you sleep.
-# One bash file. Zero tokens. As dumb as it gets.
+# One bash file. Zero tokens. As dumb as it gets. Embrace the stupid.
 #
-#   ./go.sh [folder] ["prompt"]     start a run (asks for anything missing)
-#   ./go.sh --status [folder]       how every run (or one) is doing
-#   ./go.sh --attach <folder>       watch it work (detach: Ctrl-b d)
-#   ./go.sh --resume <folder>       restart a run from its last conversation
-#   ./go.sh --stop   <folder>       stop a run for good
+#   stupid [folder] ["prompt"]      start a run (asks for anything missing)
+#   stupid --status [folder]        how every run (or one) is doing
+#   stupid --attach <folder>        watch it work (detach: Ctrl-b d)
+#   stupid --resume <folder>        restart a run from its last conversation
+#   stupid --stop   <folder>        stop a run for good
 #
 # Options for a start:
 #   --hours N        work for N hours (default 8)
@@ -16,7 +16,7 @@
 #   -- <args>        anything after -- goes straight to claude, e.g. -- --model sonnet --effort medium
 #
 # MIT License. https://github.com/A19grey/stupid-simple-harness
-VERSION=0.1.2
+VERSION=0.2.0
 set -uo pipefail
 
 # ----- knobs (env overrides) -----
@@ -41,7 +41,8 @@ num()       { local v; v=$(cat "$1" 2>/dev/null); echo "${v:-0}"; }
 ge()        { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a!="?" && a+0>=b+0)}'; }
 abspath()   { (cd "$1" && pwd); }
 sess_of()   { echo "stupid-$(basename "$1" | tr -c 'A-Za-z0-9_\n' '_')"; }
-die()       { echo "go.sh: $*" >&2; exit 1; }
+ME=$(basename "$0"); command -v "$ME" >/dev/null 2>&1 || ME="$0"   # how you called it: "stupid" or "./stupid.sh"
+die()       { echo "$ME: $*" >&2; exit 1; }
 usage()     { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; }
 awake()     {   # keep the computer from sleeping while the command runs
   if command -v caffeinate >/dev/null; then caffeinate -ims "$@"
@@ -134,7 +135,7 @@ EOF
 }
 
 write_settings() {
-  local hook="$H/go.sh --_hook"
+  local hook="$H/stupid.sh --_hook"
   cat > "$H/settings.json" <<EOF
 {
   "env": { "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "$COMPACT_AT" },
@@ -171,7 +172,7 @@ run_loop() {
     sleep 20
   done
   rm -f "$H/running.pid"
-  echo; echo "Claude is not running. Restart: go.sh --resume $D"
+  echo; echo "Claude is not running. Restart: $ME --resume $D"
   exec "${SHELL:-/bin/bash}" -l
 }
 
@@ -241,9 +242,9 @@ watch_once() {
     [ "$(num "$H/restarts")" -ge "$MAX_RESTARTS" ] && return 1
     echo $(( $(num "$H/restarts") + 1 )) > "$H/restarts"
     if tmux list-windows -t "$SESS" -F '#W' 2>/dev/null | grep -qx claude; then
-      tmux respawn-window -k -t "$SESS:claude" "'$H/go.sh' --_run '$D' resume"
+      tmux respawn-window -k -t "$SESS:claude" "'$H/stupid.sh' --_run '$D' resume"
     else
-      tmux new-window -d -t "$SESS:" -n claude -c "$D" "'$H/go.sh' --_run '$D' resume"
+      tmux new-window -d -t "$SESS:" -n claude -c "$D" "'$H/stupid.sh' --_run '$D' resume"
     fi
     log "watchdog: Claude loop not running -> restarted"; return 0
   fi
@@ -273,8 +274,8 @@ watch_loop() { while sleep "$WATCH_EVERY"; do watch_once || break; done; log "wa
 
 # ----- user commands -----
 start_tmux() {   # $1 = fresh|resume
-  tmux new-session -d -s "$SESS" -n claude -c "$D" "'$H/go.sh' --_run '$D' $1"
-  tmux new-window -d -t "$SESS" -n watch -c "$D" "'$H/go.sh' --_watch '$D'"
+  tmux new-session -d -s "$SESS" -n claude -c "$D" "'$H/stupid.sh' --_run '$D' $1"
+  tmux new-window -d -t "$SESS" -n watch -c "$D" "'$H/stupid.sh' --_watch '$D'"
 }
 attach() {
   [ -n "${SSH_NO_ATTACH:-}" ] && return 0
@@ -302,7 +303,7 @@ start() {   # $1 folder (maybe empty), $2 prompt (maybe empty)
   local dir="${1:-}" prompt="${2:-}"
   command -v claude >/dev/null || die "claude (Claude Code) is not installed or not on PATH"
   command -v tmux >/dev/null || die "tmux is required: brew install tmux  /  apt install tmux"
-  command -v python3 >/dev/null || echo "go.sh: warning: no python3, so the budget cannot be measured or enforced" >&2
+  command -v python3 >/dev/null || echo "$ME: warning: no python3, so the budget cannot be measured or enforced" >&2
   if [ -z "$dir" ]; then
     [ -t 0 ] || { usage; exit 1; }
     usage; echo; echo "No folder given, so let's start one."
@@ -311,7 +312,7 @@ start() {   # $1 folder (maybe empty), $2 prompt (maybe empty)
   dir="${dir/#\~/$HOME}"
   [ -d "$dir" ] || { mkdir -p "$dir" && echo "Created $dir"; }
   load "$dir"
-  if tmux has-session -t "$SESS" 2>/dev/null; then echo "$SESS is already running. Attaching (go.sh --stop $D to end it)."; attach; return; fi
+  if tmux has-session -t "$SESS" 2>/dev/null; then echo "$SESS is already running. Attaching ($ME --stop $D to end it)."; attach; return; fi
   if [ -n "$prompt" ]; then printf '%s\n' "$prompt" > "$D/PROMPT.md"
   elif [ ! -s "$D/PROMPT.md" ]; then
     echo "What should Claude do? Paste or type the prompt, then press Ctrl-D on an empty line:"
@@ -325,7 +326,7 @@ start() {   # $1 folder (maybe empty), $2 prompt (maybe empty)
   { echo "DEADLINE=$deadline"; echo "BUDGET=$BUDGET"; echo "YOLO=$YOLO"; echo "COMPACT_AT=$COMPACT_AT"
     printf 'CLAUDE_ARGS=('; [ ${#CLAUDE_ARGS[@]} -gt 0 ] && printf '%q ' "${CLAUDE_ARGS[@]}"; echo ')'; } > "$H/config"
   . "$H/config"
-  cp "$0" "$H/go.sh"; chmod +x "$H/go.sh"   # snapshot: editing go.sh later never breaks a running run
+  cp "$0" "$H/stupid.sh"; chmod +x "$H/stupid.sh"   # snapshot: editing stupid.sh later never breaks a running run
   touch "$H/started"
   write_rules; write_settings
   if ! git -C "$D" rev-parse --git-dir >/dev/null 2>&1; then git -C "$D" init -q; fi
@@ -335,7 +336,7 @@ start() {   # $1 folder (maybe empty), $2 prompt (maybe empty)
   start_tmux fresh
   echo "Stupid Simple Harness: $SESS is running until $(hm "$DEADLINE") with a \$$BUDGET budget."
   [ "$YOLO" = 1 ] || echo "  Note: without --yolo, any permission prompt will wait for you. Approve them now with 'don't ask again'."
-  echo "  Stay for the first minute (folder trust prompt), then detach with Ctrl-b d. Check later: ./go.sh --status"
+  echo "  Stay for the first minute (folder trust prompt), then detach with Ctrl-b d. Check later: $ME --status"
   attach
 }
 
@@ -354,7 +355,7 @@ while [ $# -gt 0 ]; do
     --_watch)   CMD=_watch; shift ;;
     --_hook)    CMD=_hook; shift ;;
     --)         shift; CLAUDE_ARGS=("$@"); break ;;
-    -*)         echo "go.sh: unknown option: $1" >&2; echo >&2; usage >&2; exit 1 ;;
+    -*)         echo "$ME: unknown option: $1" >&2; echo >&2; usage >&2; exit 1 ;;
     *)          POS+=("$1"); shift ;;
   esac
 done
@@ -363,12 +364,13 @@ case "$HOURS" in ''|*[!0-9]*) die "--hours must be a whole number" ;; esac
 case "$CMD" in
   start)  start "${POS[0]:-}" "${POS[1]:-}" ;;
   status) status "${POS[0]:-}" ;;
-  attach) [ -n "${POS[0]:-}" ] || die "usage: go.sh --attach <folder>"; load "${POS[0]}"; attach ;;
-  stop)   [ -n "${POS[0]:-}" ] || die "usage: go.sh --stop <folder>"; load "${POS[0]}"
+  attach) [ -n "${POS[0]:-}" ] || die "usage: $ME --attach <folder>"; load "${POS[0]}"; attach ;;
+  stop)   [ -n "${POS[0]:-}" ] || die "usage: $ME --stop <folder>"; load "${POS[0]}"
           touch "$H/OFF"; tmux kill-session -t "$SESS" 2>/dev/null; log "stopped by hand"; echo "Stopped $SESS." ;;
-  resume) [ -n "${POS[0]:-}" ] || die "usage: go.sh --resume <folder>"; load "${POS[0]}"
-          [ -f "$H/config" ] || die "no run in $D yet: start one with go.sh $D"
+  resume) [ -n "${POS[0]:-}" ] || die "usage: $ME --resume <folder>"; load "${POS[0]}"
+          [ -f "$H/config" ] || die "no run in $D yet: start one with $ME $D"
           rm -f "$H/OFF" "$H/restarts"
+          [ -x "$H/stupid.sh" ] || { cp "$0" "$H/stupid.sh"; chmod +x "$H/stupid.sh"; }   # runs started before the rename only have go.sh
           if ! tmux has-session -t "$SESS" 2>/dev/null; then start_tmux resume; log "resumed by hand"; fi
           attach ;;
   _run)   load "${POS[0]}"; run_loop "${POS[1]:-resume}" ;;

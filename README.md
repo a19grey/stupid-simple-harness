@@ -1,11 +1,13 @@
 # Stupid Simple Harness
 
+## Embrace the stupid.
+
 **Keep Claude Code working while you sleep. One bash file. Zero tokens. As dumb as it gets.**
 
 Yes, it's SSH. No, not that one.
 
 ```bash
-./go.sh csv-report "Build a CLI that turns our CSV exports into a weekly report"
+stupid csv-report "Build a CLI that turns our CSV exports into a weekly report"
 ```
 
 Then go to bed. In the morning there's a git history, a `PLAN.md` full of ticked boxes, and a `SUMMARY.md` telling you what got built and what to look at first.
@@ -23,11 +25,11 @@ The usual fix is an "orchestration layer". This is the opposite of that. Stupid 
 ### 11:02 pm: start it
 
 ```console
-$ ./go.sh csv-report --until 07:00 --budget 30 "Build a CLI that turns our CSV exports into a weekly report"
+$ stupid csv-report --until 07:00 --budget 30 "Build a CLI that turns our CSV exports into a weekly report"
 Created csv-report
 Stupid Simple Harness: stupid-csv_report is running until 07:00 with a $30 budget.
   Note: without --yolo, any permission prompt will wait for you. Approve them now with 'don't ask again'.
-  Stay for the first minute (folder trust prompt), then detach with Ctrl-b d. Check later: ./go.sh --status
+  Stay for the first minute (folder trust prompt), then detach with Ctrl-b d. Check later: stupid --status
 ```
 
 Claude Code opens in tmux with your prompt and starts planning. Watch it for a minute, approve anything it asks, then press **Ctrl-b d** and go to bed.
@@ -55,7 +57,7 @@ The other focuses rotate through deeper analysis, better sources, a different ap
 ### 2:00 am: you wake up and check your phone over SSH (the other one)
 
 ```console
-$ ./go.sh --status
+$ stupid --status
 RUN                          TMUX  UNTIL          SPEND KICKS NUDGES RESTARTS  STATE
 csv-report                   up    07:00     $14.20/$30    14      2        1  running
 flaky-tests                  up    05:00     $22.75/$25     9      0        0  running
@@ -86,13 +88,13 @@ $ cat csv-report/SUMMARY.md     # what got built, how to try it, what's missing
 $ git -C csv-report log --oneline | head
 ```
 
-*(The numbers above are an example night. The message formats are exactly what `go.sh` prints.)*
+*(The numbers above are an example night. The message formats are exactly what `stupid.sh` prints.)*
 
 ## How it works
 
 ```
                  ┌──────────────── tmux session "stupid-<folder>" ────────────────┐
-  ./go.sh  ───►  │  window "claude"                    window "watch"             │
+  stupid   ───►  │  window "claude"                    window "watch"             │
                  │  ┌───────────────────────────┐      ┌────────────────────────┐ │
                  │  │ restart loop              │      │ watchdog, every 10 min │ │
                  │  │   claude  ◄── Stop hook   │ ◄─── │  dead?  -> restart     │ │
@@ -115,60 +117,41 @@ None of these call a model. The budget is measured from Claude Code's own transc
 
 You need [Claude Code](https://docs.claude.com/en/docs/claude-code), `tmux`, `git`, and `python3` (for the budget). macOS or Linux.
 
+Install it as `stupid`, so you can type `stupid` in any folder:
+
 ```bash
-curl -O https://raw.githubusercontent.com/A19grey/stupid-simple-harness/main/go.sh && chmod +x go.sh
 brew install tmux          # or: sudo apt install tmux
+mkdir -p ~/.local/share/stupid-simple-harness ~/.local/bin
+curl -o ~/.local/share/stupid-simple-harness/stupid.sh https://raw.githubusercontent.com/A19grey/stupid-simple-harness/main/stupid.sh
+chmod +x ~/.local/share/stupid-simple-harness/stupid.sh
+ln -sf ~/.local/share/stupid-simple-harness/stupid.sh ~/.local/bin/stupid
+stupid --version
 ```
+
+If `stupid --version` says "command not found", add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` or `~/.bashrc` and open a new terminal. `stupid.sh` works through a symlink, and every run keeps its own snapshot in `.harness/`, so nothing else is needed. (Rather not install anything? Download `stupid.sh` into a folder and run `./stupid.sh` instead of `stupid`.)
 
 Three ways to start:
 
 ```bash
-./go.sh                                   # prints help, then asks for a folder and a prompt
-./go.sh my-project                        # uses my-project/PROMPT.md if it exists, otherwise asks
-./go.sh my-project "Do the thing"         # writes PROMPT.md and rips
+stupid                                    # prints help, then asks for a folder and a prompt
+stupid my-project                         # uses my-project/PROMPT.md if it exists, otherwise asks
+stupid my-project "Do the thing"          # writes PROMPT.md and rips
 ```
 
 While it runs:
 
 ```bash
-./go.sh --status                # every run: deadline, spend, kicks, nudges, restarts
-./go.sh --attach my-project     # watch it work (Ctrl-b d to leave)
-./go.sh --stop my-project       # stop for good
-./go.sh --resume my-project     # restart from its last conversation
+stupid --status                 # every run: deadline, spend, kicks, nudges, restarts
+stupid --attach my-project      # watch it work (Ctrl-b d to leave)
+stupid --stop my-project        # stop for good
+stupid --resume my-project      # restart from its last conversation
 ```
 
-## Install it system-wide
+From inside a project folder, `.` works too: `stupid . "Fix the flaky tests" --hours 6 --budget 25`.
 
-Want to run `ssh-harness` from any folder instead of carrying `go.sh` around? Put one copy on your `PATH`. `go.sh` already works through a symlink, and every run keeps its own snapshot in `.harness/`, so nothing else is needed.
+Want it for every user on the machine? `sudo ln -sf /path/to/stupid.sh /usr/local/bin/stupid` (on Apple Silicon Homebrew, `/opt/homebrew/bin` works too).
 
-```bash
-# 1. Keep one copy somewhere permanent
-mkdir -p ~/.local/share/stupid-simple-harness
-curl -o ~/.local/share/stupid-simple-harness/go.sh https://raw.githubusercontent.com/A19grey/stupid-simple-harness/main/go.sh
-chmod +x ~/.local/share/stupid-simple-harness/go.sh
-
-# 2. Link it onto your PATH under a short name
-mkdir -p ~/.local/bin
-ln -sf ~/.local/share/stupid-simple-harness/go.sh ~/.local/bin/harness
-```
-
-Make sure `~/.local/bin` is on your `PATH` (add this line to `~/.zshrc` or `~/.bashrc` if `harness --version` says "command not found", then open a new terminal):
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Now, from any folder:
-
-```bash
-cd ~/code/my-project
-harness . "Fix the flaky tests" --hours 6 --budget 25
-harness --status               # every run on this machine
-```
-
-Prefer a true system-wide install for every user on the machine? Use `sudo ln -sf /path/to/go.sh /usr/local/bin/harness` instead (on Apple Silicon Homebrew, `/opt/homebrew/bin` works too).
-
-To update, re-run the `curl` line. To remove, delete the symlink and the `~/.local/share/stupid-simple-harness` folder.
+To update, re-run the `curl` line. To remove, delete `~/.local/bin/stupid` and the `~/.local/share/stupid-simple-harness` folder.
 
 ## Writing a good PROMPT.md
 
@@ -183,39 +166,39 @@ After v1: better charts, a short write-up of anything odd in the data, tests for
 Stay inside this folder. Do not install anything system-wide.
 ```
 
-This one is in [`examples/PROMPT.md`](examples/PROMPT.md). Try it: `mkdir demo && cp examples/PROMPT.md demo/ && ./go.sh demo --hours 1 --budget 5`
+This one is in [`examples/PROMPT.md`](examples/PROMPT.md). Try it: `mkdir demo && cp examples/PROMPT.md demo/ && stupid demo --hours 1 --budget 5`
 
 ## Recipes
 
 ```bash
 # A first run you can watch: one hour, five dollars
-./go.sh demo --hours 1 --budget 5
+stupid demo --hours 1 --budget 5
 
 # Overnight analysis on a cheaper model
-./go.sh churn-analysis --until 07:00 --budget 30 -- --model sonnet --effort medium
+stupid churn-analysis --until 07:00 --budget 30 -- --model sonnet --effort medium
 
 # Fix flaky tests in a throwaway container, no permission prompts
-./go.sh flaky-tests --hours 6 --budget 25 --yolo
+stupid flaky-tests --hours 6 --budget 25 --yolo
 
 # Three experiments at once, then check on all of them
-./go.sh idea-a --until 07:00; ./go.sh idea-b --until 07:00; ./go.sh idea-c --until 07:00
-./go.sh --status
+stupid idea-a --until 07:00; stupid idea-b --until 07:00; stupid idea-c --until 07:00
+stupid --status
 ```
 
-Each `./go.sh` attaches you to its run; press **Ctrl-b d** to detach and start the next.
+Each `stupid` attaches you to its run; press **Ctrl-b d** to detach and start the next.
 
 Driving hardware or slow network services? Say so in `PROMPT.md`. Claude is already told to wrap long commands in timeouts, and the watchdog presses Esc on anything stuck for 30 minutes, but a prompt that names the risky commands does better.
 
 ## Options
 
-`./go.sh -h` (or `-help`, `--help`, `help`) prints all of these.
+`stupid -h` (or `-help`, `--help`, `help`) prints all of these.
 
 ```bash
-./go.sh my-project --hours 6                 # work for 6 hours (default 8)
-./go.sh my-project --until 07:00             # ...or until a clock time
-./go.sh my-project --budget 20               # spend limit in USD (default 50)
-./go.sh my-project --yolo                    # no permission prompts (read the warning below)
-./go.sh my-project -- --model sonnet --effort medium   # anything after -- goes to claude
+stupid my-project --hours 6                 # work for 6 hours (default 8)
+stupid my-project --until 07:00             # ...or until a clock time
+stupid my-project --budget 20               # spend limit in USD (default 50)
+stupid my-project --yolo                    # no permission prompts (read the warning below)
+stupid my-project -- --model sonnet --effort medium   # anything after -- goes to claude
 ```
 
 Tuning knobs (environment variables): `SSH_IDLE_MIN` (15), `SSH_HANG_MIN` (30), `SSH_WATCH_EVERY` (600 s), `SSH_GRACE_MIN` (45, time allowed to wrap up after the deadline), `SSH_COMPACT_AT` (200000 tokens, when Claude Code auto-compacts).
@@ -228,12 +211,12 @@ my-project/
   PLAN.md          Claude's checklist; the harness counts the unticked boxes
   NOTES.md         decisions Claude made while nobody was awake
   SUMMARY.md       written at the end: what was built, how to try it, what's missing
-  .harness/        harness state: config, log, rules, settings, a snapshot of go.sh
+  .harness/        harness state: config, log, rules, settings, a snapshot of stupid.sh
 ```
 
 The folder becomes a git repo if it isn't one already, and `.harness/` is gitignored. Claude is told to commit after every step and never to push (`git push` is also denied in its settings).
 
-Nothing is written to your global Claude Code settings. The harness passes its hook and rules at launch (`--settings` and `--append-system-prompt`), so they apply only to that run. Editing `go.sh` mid-run is safe: each run uses its own snapshot in `.harness/`.
+Nothing is written to your global Claude Code settings. The harness passes its hook and rules at launch (`--settings` and `--append-system-prompt`), so they apply only to that run. Editing `stupid.sh` mid-run is safe: each run uses its own snapshot in `.harness/`.
 
 ## The budget
 
@@ -248,7 +231,7 @@ Honest caveats:
 - **On a Claude subscription,** the dollar figure is what the same usage would cost on the API. It still works as a usage limit, but it isn't your bill.
 - **It can overshoot.** Spend is checked when Claude tries to stop and every 10 minutes, so one long turn can run past the limit before it's caught. The 1.25× hard stop is the backstop.
 - **It only counts Claude Code.** Other agents you shell out to (Codex, OpenCode, ...) aren't included.
-- **Prices change.** New models need a line in the price table in `go.sh`. An unknown model is priced like Opus 4.5, which errs on the high side.
+- **Prices change.** New models need a line in the price table in `stupid.sh`. An unknown model is priced like Opus 4.5, which errs on the high side.
 
 ## About `--yolo`
 
@@ -268,7 +251,7 @@ Because you said "work until 7". Each time Claude says it's finished, the harnes
 Sometimes. That's what the budget is for, and why the prompt should say what "better" means. Read `SUMMARY.md` and the git log, not the line count.
 
 **Can I run several at once?**
-Yes. One folder per run, one tmux session per folder (`stupid-<folder>`). `./go.sh --status` shows them all.
+Yes. One folder per run, one tmux session per folder (`stupid-<folder>`). `stupid --status` shows them all.
 
 **My laptop went to sleep.**
 On macOS the harness runs Claude under `caffeinate`, and on Linux under `systemd-inhibit` when it's available. Closing the lid still sleeps most laptops, so plug in and leave it open.
